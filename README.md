@@ -112,349 +112,353 @@ while (true) {
   
 ---
 
-## 3. 비교한 GC 알고리즘 개념
-### JVM 메모리 & GC 공통 개념
+# 3. 비교한 GC 알고리즘 개념
+
+## JVM 메모리 & GC 공통 개념
 
 ### Generational Hypothesis
 - 대부분의 객체는 금방 죽음.
-- 따라서 **Young (Eden / Survivor)** 와 **Old (Tenured)** 영역으로 나누어 수집 비용을 줄임.
+- 따라서 Young (Eden / Survivor) 와 Old (Tenured) 영역으로 나누어 수집 비용을 줄임.
 
 ### 카드 테이블 / Remembered Set (RSet)
 - 다른 영역(Region)에서 이 Region을 참조하는 포인터를 추적.
 - 전 힙 스캔을 피하고, 지역 단위 수집을 가능하게 함.
 
 ### Barrier (장벽)
-- **Pre/Write barrier (SATB, G1 등)**: 쓰기 전에 이전 값을 기록 → 스냅샷 일관성 보장.
-- **Post/Write barrier (CMS incremental-update 등)**: 쓰기 후 더티 카드를 표시 → 변경 추적.
-- **Load/Read barrier (ZGC)**: 참조를 읽을 때 포인터 색상/매핑을 확인·재매핑.
+- **Pre/Write barrier (SATB, G1 등)**: 쓰기 전에 이전 값을 기록 → 스냅샷 일관성 보장.  
+- **Post/Write barrier (CMS incremental-update 등)**: 쓰기 후 더티 카드를 표시 → 변경 추적.  
+- **Load/Read barrier (ZGC)**: 참조를 읽을 때 포인터 색상/매핑을 확인·재매핑.  
 
 ### 수집 방식
-- **복사(Copying / Evacuation)**: 단편화 적음, Young에 유리.
-- **마크-스윕(-컴팩트) (Mark-Sweep / Mark-Compact)**: 빠르지만 단편화가 누적되면 Full GC(압축) 비용이 큼.
+- **복사(Copying / Evacuation)**: 단편화 적음, Young에 유리.  
+- **마크-스윕(-컴팩트) (Mark-Sweep / Mark-Compact)**: 빠르지만 단편화가 누적되면 Full GC(압축) 비용이 큼.  
 
 ### STW (Stop-The-World)
-- 루트 스캔, 리마크, 객체 이동 같은 정합성 확보를 위한 핵심 구간.
-- STW를 줄이는 것이 목표지만, 완전히 없애긴 어려움.
+- 루트 스캔, 리마크, 객체 이동 같은 정합성 확보를 위한 핵심 구간.  
+- STW를 줄이는 것이 목표지만, 완전히 없애긴 어려움.  
 
 ---
 
-# 3.1 Serial GC / Parallel GC
+## 3.1 Serial GC / Parallel GC
 
-## Serial GC
+### Serial GC
 
-### 핵심 키워드
-- 단일 스레드
-- 구조 단순
-- 소규모 힙 / 저사양 환경
+**핵심 키워드**
+- 단일 스레드  
+- 구조 단순  
+- 소규모 힙 / 저사양 환경  
 
-### 개념
-- 가장 기본적인 GC
-- 모든 수집 작업을 **하나의 GC 스레드**가 직렬로 수행
-- GC 동안 애플리케이션은 **완전 중단(STW)**
-- 작은 힙과 싱글코어 환경에서 효율적
-- 구조가 단순하여 이해와 디버깅 용이
+**개념**
+- 가장 기본적인 GC  
+- 모든 수집 작업을 하나의 GC 스레드가 직렬로 수행  
+- GC 동안 애플리케이션은 완전 중단(STW)  
+- 작은 힙과 싱글코어 환경에서 효율적  
+- 구조가 단순하여 이해와 디버깅 용이  
 
-### 메모리 & 데이터 구조
-- Generational 구조: Young (Eden + 2×Survivor) / Old (Tenured)
-- 객체 헤더: age, 해시, 락 상태 등 정보 포함
-- **TLAB(Thread-Local Allocation Buffer)** 활용 가능 → 객체 할당 속도 향상
+**메모리 & 데이터 구조**
+- Generational 구조: Young (Eden + 2×Survivor) / Old (Tenured)  
+- 객체 헤더: age, 해시, 락 상태 등 정보 포함  
+- TLAB(Thread-Local Allocation Buffer) 활용 가능 → 객체 할당 속도 향상  
 
-### 동작 방식
-- **Minor GC (Young, Copying)**
-  1. Eden과 Survivor 영역의 살아있는 객체를 다른 Survivor 또는 Old 영역으로 복사
-  2. 참조 갱신
-- **Major/Full GC (Old, Mark-Compact)**
-  1. Old 영역 객체 마킹
-  2. 살아있는 객체를 연속 공간으로 압축
-  3. 참조 갱신
-
----
-
-## Parallel GC
-
-### 핵심 키워드
-- 멀티스레드 STW 수집
-- 처리량(Throughput) 최적화
-
-### 개념
-- Serial GC를 **멀티스레드 환경**에 맞게 확장한 버전
-- 여러 GC 스레드(worker)가 동시에 수집 작업 수행 → STW 시간 단축
-- 전체 처리량 극대화
-
-### 메모리 & 데이터 구조
-- Generational 구조 유지
-- Young 영역: Parallel Scavenge (병렬 복사)
-- Old 영역: Parallel Old (병렬 Mark-Compact)
-- GC 스레드 수: `-XX:ParallelGCThreads` 옵션으로 조절 가능
-
-### 동작 방식
-- **Young GC (병렬 Minor)**
-  1. Eden을 여러 블록으로 나눔
-  2. 각 스레드가 객체 복사 수행
-  3. 참조 갱신
-- **Old GC (병렬 Full)**
-  1. 여러 스레드가 동시에 Mark 단계 수행
-  2. 객체 이동과 Compact 단계 병렬 처리
-
-
-## Serial / Parallel GC 내부 보조기법
-
-### 1.1 TLAB (Thread-Local Allocation Buffer)
-
-#### 개념
-- 각 스레드가 힙에서 객체를 빠르게 할당하기 위해 사용하는 **스레드 전용 메모리 버퍼**
-- 멀티스레드 환경에서 힙 접근 경쟁(lock contention) 최소화
-
-#### 설명 / 동작
-1. 힙에서 일정 크기의 블록을 TLAB로 할당
-2. 스레드는 TLAB에서 직접 객체 할당 → 동시성 확보 및 속도 향상
-3. TLAB 가득 차면 새로운 블록 힙에서 요청
-4. Minor GC 발생 시, 살아남은 객체를 Survivor 또는 Old 영역으로 이동
-- 목적: 스레드 로컬 할당 성능 최적화, 힙 경쟁 최소화
-
-
-### 1.2 Work-stealing / Work-queue
-
-#### 개념
-- Parallel GC에서 **스레드 간 작업 분산 구조**
-- 작업 부하 불균형 시, 남은 작업을 다른 스레드가 훔쳐 처리 (work-stealing)
-
-#### 설명 / 동작
-1. Eden과 Old 영역을 블록 단위로 나눠 스레드별 초기 작업 분배
-2. 각 스레드는 할당 블록에서 객체 복사 또는 Mark/Compact 수행
-3. 작업 부족 스레드는 다른 스레드의 남은 작업 훔쳐 처리 → CPU 활용 극대화
-- 목적: GC 처리 시간 최적화, 멀티코어 활용 극대화, 동적 부하 균형 실현
+**동작 방식**
+- Minor GC (Young, Copying)  
+  1. Eden과 Survivor 영역의 살아있는 객체를 다른 Survivor 또는 Old 영역으로 복사  
+  2. 참조 갱신  
+- Major/Full GC (Old, Mark-Compact)  
+  1. Old 영역 객체 마킹  
+  2. 살아있는 객체를 연속 공간으로 압축  
+  3. 참조 갱신  
 
 ---
 
-# 3.2 CMS (Concurrent Mark-Sweep)
+### Parallel GC
 
-## 핵심 키워드
-- 동시 마크/스윕
-- STW 시간 최소화
-- 단편화 발생 가능
-- JDK 14 이후 제거
+**핵심 키워드**
+- 멀티스레드 STW 수집  
+- 처리량(Throughput) 최적화  
 
-## 개념
-- Old 영역 GC를 **애플리케이션과 병행(concurrent)** 수행
-- 평균 지연(latency)을 줄이는 Low Pause GC
-- 압축(compaction) 없이 동작 → 단편화 가능
+**개념**
+- Serial GC를 멀티스레드 환경에 맞게 확장한 버전  
+- 여러 GC 스레드(worker)가 동시에 수집 작업 수행 → STW 시간 단축  
+- 전체 처리량 극대화  
 
-## 메모리 & 데이터 구조
-- Young 영역: Parallel Scavenge 사용
-- Old 영역: CMS (Free List 기반)
-- **Card Table + Post-write barrier**로 cross-generation 참조 추적
+**메모리 & 데이터 구조**
+- Generational 구조 유지  
+- Young 영역: Parallel Scavenge (병렬 복사)  
+- Old 영역: Parallel Old (병렬 Mark-Compact)  
+- GC 스레드 수: `-XX:ParallelGCThreads` 옵션으로 조절 가능  
 
-## 동작 방식
-1. **Initial Mark (STW)**: 루트에 연결된 객체를 빠르게 마크
-2. **Concurrent Mark**: 애플리케이션과 동시에 객체 그래프 탐색
-3. **Remark (STW)**: concurrent 중 변경된 참조 최종 보정
-4. **Concurrent Sweep**: 도달 불가 객체 해제
-5. **Fallback Compaction**: 단편화 심하면 Full GC(Serial Old) 수행
-
-## CMS 내부 보조기법
-
-### 2.1 Write Barrier (Post-write barrier)
-
-#### 개념
-- 애플리케이션이 Old 영역 객체 참조를 변경할 때, GC가 누락 없이 마크하도록 참조 변경 기록
-
-#### 설명 / 동작
-1. 객체 A가 B를 참조 → 참조를 C로 변경
-2. Post-write barrier가 “B 참조 제거” 기록
-3. Concurrent Mark 단계에서 기록된 참조를 재검사 → 누락 방지
-- 목적: STW 시간을 줄이며 동시 마킹 안정화
-
-
-### 2.2 Remark 단계
-
-#### 개념
-- Concurrent Mark 단계에서 누락된 참조를 최종 점검하는 **짧은 STW 단계**
-
-#### 설명 / 동작
-1. 애플리케이션 잠시 정지(STW)
-2. Concurrent Mark 중 변경된 참조를 재검사
-3. 참조 상태를 최신으로 보정
-- 목적: 메모리 정합성 확보, GC 안정성 보장
-
-
-### 2.3 Free List 관리
-
-#### 개념
-- Old 영역 객체를 **가변 크기 블록 단위로 관리**하는 빈 공간 연결 리스트
-
-#### 설명 / 동작
-1. 객체 해제 시 해당 블록을 Free List에 연결
-2. 새 객체 할당 시 적절한 블록을 찾아 사용
-3. 단편화 심하면 Full GC로 압축
-- 목적: Old 영역 가변 크기 객체 할당/해제 효율화, 단편화 관리
+**동작 방식**
+- Young GC (병렬 Minor)  
+  1. Eden을 여러 블록으로 나눔  
+  2. 각 스레드가 객체 복사 수행  
+  3. 참조 갱신  
+- Old GC (병렬 Full)  
+  1. 여러 스레드가 동시에 Mark 단계 수행  
+  2. 객체 이동과 Compact 단계 병렬 처리  
 
 ---
 
-# 3.3 G1 GC (Garbage-First)
+### Serial / Parallel GC 내부 보조기법
 
-## 핵심 키워드
-- Region 기반
-- SATB (pre-write) barrier
-- 예측 가능한 Pause Time
-- JDK 9+ 기본 GC
+#### 1.1 TLAB (Thread-Local Allocation Buffer)
 
-## 개념
-- CMS 단점을 개선한 현대적 GC
-- 힙을 균일 크기 **Region (1~32MB)** 단위로 분할
-- **Garbage-First** 전략: 회수 가치 높은 Region 우선 수집
-- `-XX:MaxGCPauseMillis`로 목표 pause 시간 설정 가능
+**개념**
+- 각 스레드가 힙에서 객체를 빠르게 할당하기 위해 사용하는 스레드 전용 메모리 버퍼  
+- 멀티스레드 환경에서 힙 접근 경쟁(lock contention) 최소화  
 
-## 메모리 & 데이터 구조
-- Region: Young / Old / Humongous
-- **RSet (Remembered Set)**: cross-region 참조 추적
-- **Card Table**: 참조 변경 시 Dirty 상태 표시 → RSet 갱신
+**설명 / 동작**
+1. 힙에서 일정 크기의 블록을 TLAB로 할당  
+2. 스레드는 TLAB에서 직접 객체 할당 → 동시성 확보 및 속도 향상  
+3. TLAB 가득 차면 새로운 블록 힙에서 요청  
+4. Minor GC 발생 시, 살아남은 객체를 Survivor 또는 Old 영역으로 이동  
 
-## 동작 방식
-1. **Initial Mark (STW)**: 루트 연결 객체 마크
-2. **Concurrent Mark**: 여러 스레드가 SATB 기반으로 마킹
-3. **Remark (STW)**: 변경된 참조 보정
-4. **Cleanup**: Collection Set(CSet) 선정
-5. **Evacuation (STW, 병렬)**: CSet 객체를 다른 Region으로 복사
-6. **Mixed GC**: Young + Old 일부 Region 동시에 수거
+- 목적: 스레드 로컬 할당 성능 최적화, 힙 경쟁 최소화  
 
+#### 1.2 Work-stealing / Work-queue
 
-## G1 내부 보조기법
+**개념**
+- Parallel GC에서 스레드 간 작업 분산 구조  
+- 작업 부하 불균형 시, 남은 작업을 다른 스레드가 훔쳐 처리 (work-stealing)  
 
-### 3.1 RSet (Remembered Set)
+**설명 / 동작**
+1. Eden과 Old 영역을 블록 단위로 나눠 스레드별 초기 작업 분배  
+2. 각 스레드는 할당 블록에서 객체 복사 또는 Mark/Compact 수행  
+3. 작업 부족 스레드는 다른 스레드의 남은 작업 훔쳐 처리 → CPU 활용 극대화  
 
-#### 개념
-- 각 Region별로 다른 Region에서 참조하는 객체를 기록하는 메타데이터
-
-#### 설명 / 동작
-1. 애플리케이션이 객체 참조 변경 → Dirty Card 표시
-2. Dirty Card 기반으로 RSet 업데이트
-3. Collection Set 선정 시 RSet 참조 → cross-region 안전 수거
-- 목적: 전 힙 스캔 없이 partial GC 가능
-
-
-### 3.2 Card Table
-
-#### 개념
-- 작은 메모리 블록(카드) 단위로 Dirty 상태 표시
-
-#### 설명 / 동작
-1. 객체 참조 변경 시 해당 카드 Dirty 표시
-2. GC가 Dirty 카드만 확인 → RSet 갱신
-- 목적: 힙 전체 스캔 없이 cross-region 참조 추적
-
-
-### 3.3 SATB (Snapshot-At-The-Beginning) Barrier
-
-#### 개념
-- Pre-write barrier 방식으로 객체가 GC 시작 시점에 살아있었음을 스냅샷 기록
-
-#### 설명 / 동작
-1. 애플리케이션이 참조를 변경하기 전 기존 참조를 기록
-2. GC가 기록된 참조를 기반으로 concurrent 마킹 수행
-- 목적: concurrent GC 시 참조 누락 방지, pause 시간 최소화
-
+- 목적: GC 처리 시간 최적화, 멀티코어 활용 극대화, 동적 부하 균형 실현  
 
 ---
 
-# ZGC (Z Garbage Collector)
+## 3.2 CMS (Concurrent Mark-Sweep)
 
-## 1. 핵심 목표
-- **Ultra-low latency**: Stop-The-World(STW) 시간을 수 밀리초 수준으로 제한
-- **Concurrent GC**: 대부분의 GC 작업을 애플리케이션과 동시에 수행
-- **대형 힙 지원**: 수백 GB ~ TB 규모 힙에서도 효율적
-- **단편화 최소화**: 객체 이동과 재배치로 힙 단편화 방지
+**핵심 키워드**
+- 동시 마크/스윕  
+- STW 시간 최소화  
+- 단편화 발생 가능  
+- JDK 14 이후 제거  
 
----
+**개념**
+- Old 영역 GC를 애플리케이션과 병행(concurrent) 수행  
+- 평균 지연(latency)을 줄이는 Low Pause GC  
+- 압축(compaction) 없이 동작 → 단편화 가능  
 
-## 2. 주요 개념
+**메모리 & 데이터 구조**
+- Young 영역: Parallel Scavenge 사용  
+- Old 영역: CMS (Free List 기반)  
+- Card Table + Post-write barrier로 cross-generation 참조 추적  
 
-### 2.1 Non-generational vs Generational
-- **Non-generational** (JDK 17까지): 세대 구분 없이 모든 객체를 동일하게 관리
-- **Generational ZGC** (JDK 21+): Young / Old 세대 구분, Hot/Cold 객체 관리를 통해 효율 향상
-
-### 2.2 ZPage
-- 힙을 균일한 크기의 페이지 단위로 관리
-- 각 ZPage는 Young, Old, Humongous Object 용도로 나뉨
-- 페이지 단위 이동과 수거 가능 → GC의 부분 동작 가능
-
-### 2.3 Colored Pointer
-- 64bit 포인터 상위 비트에 상태 정보 내장
-- 상태 정보 예시:
-  - 객체가 이동 중인지
-  - 객체가 참조 중인지
-  - 객체가 Old/Young/Humongous인지
-- Load/Read Barrier와 결합하여 객체 참조를 안전하게 재매핑
-
-### 2.4 Load/Read Barrier
-- 애플리케이션이 참조를 읽을 때, 참조가 올바른 위치를 가리키도록 보장
-- Barrier 동작 시점:
-  1. 참조 읽기
-  2. Colored Pointer 검사
-  3. 필요 시 새 주소로 리다이렉션
-- 목적: 거의 STW 없이 concurrent relocate 가능
-
-### 2.5 Remap / Relocate Queue
-- 이동 중인 객체의 새 위치 정보를 비동기로 기록
-- GC 스레드와 애플리케이션 스레드가 충돌하지 않고 이동/복사 수행
-- 동시성 유지와 ultra-low latency 달성에 핵심 역할
+**동작 방식**
+1. Initial Mark (STW): 루트에 연결된 객체를 빠르게 마크  
+2. Concurrent Mark: 애플리케이션과 동시에 객체 그래프 탐색  
+3. Remark (STW): concurrent 중 변경된 참조 최종 보정  
+4. Concurrent Sweep: 도달 불가 객체 해제  
+5. Fallback Compaction: 단편화 심하면 Full GC(Serial Old) 수행  
 
 ---
 
-## 3. 동작 단계 (Runtime Perspective)
+### CMS 내부 보조기법
 
-1. **Concurrent Marking**
-   - 루트 객체에서 시작하여 접근 가능한 객체를 마킹
-   - 대부분 애플리케이션과 동시에 수행
-   - 객체 이동 여부를 Colored Pointer로 표시
+#### 2.1 Write Barrier (Post-write barrier)
 
-2. **Concurrent Relocate**
-   - 살아있는 객체를 새 위치로 복사
-   - Remap/Relocate Queue에 새 위치 기록
-   - 참조 갱신은 Load/Read Barrier를 통해 실시간 처리
+**개념**
+- 애플리케이션이 Old 영역 객체 참조를 변경할 때, GC가 누락 없이 마크하도록 참조 변경 기록  
 
-3. **Commit / Reclamation**
-   - 이전 위치를 힙에서 회수
-   - GC가 완료되면 모든 참조가 새 위치로 안정화
+**설명 / 동작**
+1. 객체 A가 B를 참조 → 참조를 C로 변경  
+2. Post-write barrier가 “B 참조 제거” 기록  
+3. Concurrent Mark 단계에서 기록된 참조를 재검사 → 누락 방지  
 
-4. **Humongous Object 처리**
-   - 큰 객체는 여러 ZPage를 연속으로 할당
-   - 이동 시 페이지 단위로 처리
-   - GC 효율과 pause time 제어 가능
+- 목적: STW 시간을 줄이며 동시 마킹 안정화  
 
----
+#### 2.2 Remark 단계
 
-## 4. 내부 최적화 기법
+**개념**
+- Concurrent Mark 단계에서 누락된 참조를 최종 점검하는 짧은 STW 단계  
 
-### 4.1 Concurrent Class Unloading
-- 사용되지 않는 클래스와 메타데이터도 concurrent로 제거
-- 대형 애플리케이션에서 PermGen/Metaspace 압축 역할
+**설명 / 동작**
+1. 애플리케이션 잠시 정지(STW)  
+2. Concurrent Mark 중 변경된 참조를 재검사  
+3. 참조 상태를 최신으로 보정  
 
-### 4.2 Biased/Forwarding Pointer
-- 객체가 이동 중일 때 임시 포인터를 설정
-- Load/Read Barrier가 이 포인터를 참조하여 애플리케이션에 올바른 주소 제공
+- 목적: 메모리 정합성 확보, GC 안정성 보장  
 
-### 4.3 Memory Coloring & Quiescence
-- 힙 페이지 상태를 색상(bit)으로 표시
-- 페이지 quiescence 확인 후 이동 → 안정성 보장
+#### 2.3 Free List 관리
 
-### 4.4 Thread-Local Allocation Buffer (TLAB) 활용
-- 애플리케이션 스레드가 빠르게 객체 할당
-- GC concurrent 진행 중에도 스레드 로컬 할당 충돌 최소화
+**개념**
+- Old 영역 객체를 가변 크기 블록 단위로 관리하는 빈 공간 연결 리스트  
+
+**설명 / 동작**
+1. 객체 해제 시 해당 블록을 Free List에 연결  
+2. 새 객체 할당 시 적절한 블록을 찾아 사용  
+3. 단편화 심하면 Full GC로 압축  
+
+- 목적: Old 영역 가변 크기 객체 할당/해제 효율화, 단편화 관리  
 
 ---
 
-## 5. 장점
-- Ultra-low latency: 수 ms 수준의 STW
-- 대형 힙 지원: TB 단위 힙에서도 안정적
-- 부분적인 GC 가능: 전체 힙 스캔 필요 없음
-- 세대 구분 가능(JDK 21+): Young/Old 분리로 효율 향상
+## 3.3 G1 GC (Garbage-First)
 
-## 6. 고려 사항 / 단점
-- 모든 참조 읽기에 Load/Read Barrier 오버헤드 존재
-- CPU 부담 증가
-- 매우 큰 Humongous Object 집중 시 GC 효율 저하 가능
-- 복잡한 구현으로 디버깅 난이도 상승
+**핵심 키워드**
+- Region 기반  
+- SATB (pre-write) barrier  
+- 예측 가능한 Pause Time  
+- JDK 9+ 기본 GC  
+
+**개념**
+- CMS 단점을 개선한 현대적 GC  
+- 힙을 균일 크기 Region (1~32MB) 단위로 분할  
+- Garbage-First 전략: 회수 가치 높은 Region 우선 수집  
+- `-XX:MaxGCPauseMillis`로 목표 pause 시간 설정 가능  
+
+**메모리 & 데이터 구조**
+- Region: Young / Old / Humongous  
+- RSet (Remembered Set): cross-region 참조 추적  
+- Card Table: 참조 변경 시 Dirty 상태 표시 → RSet 갱신  
+
+**동작 방식**
+1. Initial Mark (STW): 루트 연결 객체 마크  
+2. Concurrent Mark: 여러 스레드가 SATB 기반으로 마킹  
+3. Remark (STW): 변경된 참조 보정  
+4. Cleanup: Collection Set(CSet) 선정  
+5. Evacuation (STW, 병렬): CSet 객체를 다른 Region으로 복사  
+6. Mixed GC: Young + Old 일부 Region 동시에 수거  
+
+---
+
+### G1 내부 보조기법
+
+#### 3.1 RSet (Remembered Set)
+
+**개념**
+- 각 Region별로 다른 Region에서 참조하는 객체를 기록하는 메타데이터  
+
+**설명 / 동작**
+1. 애플리케이션이 객체 참조 변경 → Dirty Card 표시  
+2. Dirty Card 기반으로 RSet 업데이트  
+3. Collection Set 선정 시 RSet 참조 → cross-region 안전 수거  
+
+- 목적: 전 힙 스캔 없이 partial GC 가능  
+
+#### 3.2 Card Table
+
+**개념**
+- 작은 메모리 블록(카드) 단위로 Dirty 상태 표시  
+
+**설명 / 동작**
+1. 객체 참조 변경 시 해당 카드 Dirty 표시  
+2. GC가 Dirty 카드만 확인 → RSet 갱신  
+
+- 목적: 힙 전체 스캔 없이 cross-region 참조 추적  
+
+#### 3.3 SATB (Snapshot-At-The-Beginning) Barrier
+
+**개념**
+- Pre-write barrier 방식으로 객체가 GC 시작 시점에 살아있었음을 스냅샷 기록  
+
+**설명 / 동작**
+1. 애플리케이션이 참조를 변경하기 전 기존 참조를 기록  
+2. GC가 기록된 참조를 기반으로 concurrent 마킹 수행  
+
+- 목적: concurrent GC 시 참조 누락 방지, pause 시간 최소화  
+
+---
+
+## ZGC (Z Garbage Collector)
+
+### 1. 핵심 목표
+- Ultra-low latency: Stop-The-World(STW) 시간을 수 밀리초 수준으로 제한  
+- Concurrent GC: 대부분의 GC 작업을 애플리케이션과 동시에 수행  
+- 대형 힙 지원: 수백 GB ~ TB 규모 힙에서도 효율적  
+- 단편화 최소화: 객체 이동과 재배치로 힙 단편화 방지  
+
+---
+
+### 2. 주요 개념
+
+#### 2.1 Non-generational vs Generational
+- Non-generational (JDK 17까지): 세대 구분 없이 모든 객체를 동일하게 관리  
+- Generational ZGC (JDK 21+): Young / Old 세대 구분, Hot/Cold 객체 관리를 통해 효율 향상  
+
+#### 2.2 ZPage
+- 힙을 균일한 크기의 페이지 단위로 관리  
+- 각 ZPage는 Young, Old, Humongous Object 용도로 나뉨  
+- 페이지 단위 이동과 수거 가능 → GC의 부분 동작 가능  
+
+#### 2.3 Colored Pointer
+- 64bit 포인터 상위 비트에 상태 정보 내장  
+- 상태 정보 예시:  
+  - 객체가 이동 중인지  
+  - 객체가 참조 중인지  
+  - 객체가 Old/Young/Humongous인지  
+- Load/Read Barrier와 결합하여 객체 참조를 안전하게 재매핑  
+
+#### 2.4 Load/Read Barrier
+- 애플리케이션이 참조를 읽을 때, 참조가 올바른 위치를 가리키도록 보장  
+- Barrier 동작 시점:  
+  1. 참조 읽기  
+  2. Colored Pointer 검사  
+  3. 필요 시 새 주소로 리다이렉션  
+- 목적: 거의 STW 없이 concurrent relocate 가능  
+
+#### 2.5 Remap / Relocate Queue
+- 이동 중인 객체의 새 위치 정보를 비동기로 기록  
+- GC 스레드와 애플리케이션 스레드가 충돌하지 않고 이동/복사 수행  
+- 동시성 유지와 ultra-low latency 달성에 핵심 역할  
+
+---
+
+### 3. 동작 단계 (Runtime Perspective)
+1. **Concurrent Marking**  
+   - 루트 객체에서 시작하여 접근 가능한 객체를 마킹  
+   - 대부분 애플리케이션과 동시에 수행  
+   - 객체 이동 여부를 Colored Pointer로 표시  
+2. **Concurrent Relocate**  
+   - 살아있는 객체를 새 위치로 복사  
+   - Remap/Relocate Queue에 새 위치 기록  
+   - 참조 갱신은 Load/Read Barrier를 통해 실시간 처리  
+3. **Commit / Reclamation**  
+   - 이전 위치를 힙에서 회수  
+   - GC가 완료되면 모든 참조가 새 위치로 안정화  
+4. **Humongous Object 처리**  
+   - 큰 객체는 여러 ZPage를 연속으로 할당  
+   - 이동 시 페이지 단위로 처리  
+   - GC 효율과 pause time 제어 가능  
+
+---
+
+### 4. 내부 최적화 기법
+
+#### 4.1 Concurrent Class Unloading
+- 사용되지 않는 클래스와 메타데이터도 concurrent로 제거  
+- 대형 애플리케이션에서 PermGen/Metaspace 압축 역할  
+
+#### 4.2 Biased/Forwarding Pointer
+- 객체가 이동 중일 때 임시 포인터를 설정  
+- Load/Read Barrier가 이 포인터를 참조하여 애플리케이션에 올바른 주소 제공  
+
+#### 4.3 Memory Coloring & Quiescence
+- 힙 페이지 상태를 색상(bit)으로 표시  
+- 페이지 quiescence 확인 후 이동 → 안정성 보장  
+
+#### 4.4 Thread-Local Allocation Buffer (TLAB) 활용
+- 애플리케이션 스레드가 빠르게 객체 할당  
+- GC concurrent 진행 중에도 스레드 로컬 할당 충돌 최소화  
+
+---
+
+### 5. 장점
+- Ultra-low latency: 수 ms 수준의 STW  
+- 대형 힙 지원: TB 단위 힙에서도 안정적  
+- 부분적인 GC 가능: 전체 힙 스캔 필요 없음  
+- 세대 구분 가능(JDK 21+): Young/Old 분리로 효율 향상  
+
+### 6. 고려 사항 / 단점
+- 모든 참조 읽기에 Load/Read Barrier 오버헤드 존재  
+- CPU 부담 증가  
+- 매우 큰 Humongous Object 집중 시 GC 효율 저하 가능  
+- 복잡한 구현으로 디버깅 난이도 상승  
+
 
 ---
 

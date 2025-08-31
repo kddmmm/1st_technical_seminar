@@ -79,23 +79,42 @@
 
 #### STW 비교
 
-<img width="2268" height="1202" alt="Image" src="https://github.com/user-attachments/assets/5857f948-5cab-420e-b1d3-3d5782fae181" />
-
-<img width="534" height="336" alt="Image" src="https://github.com/user-attachments/assets/02b0656c-a993-4be0-86ef-e5fa89bc2ef9" />
-
+<table>
+  <tr>
+    <td><img width="1200" height="600" alt="Image" src="https://github.com/user-attachments/assets/5857f948-5cab-420e-b1d3-3d5782fae181" /></td>
+    <td><img width="534" height="336" alt="Image" src="https://github.com/user-attachments/assets/02b0656c-a993-4be0-86ef-e5fa89bc2ef9" /></td>
+  </tr>
+  <tr>
+    <td>Serial GC 및 Parallel GC 평균 STW 그래프</td>
+    <td>Serial GC 및 Parallel GC 평균 STW</td>
+  </tr>
+</table>
 
 #### CPU 연산 시간 비교
 
-<img width="1126" height="576" alt="Image" src="https://github.com/user-attachments/assets/a4cc013c-40a1-43ec-b629-e5a53bab49e8" />
-
-<img width="1152" height="586" alt="Image" src="https://github.com/user-attachments/assets/33ac9c51-8421-4459-8812-b44d8f4fb77f" />
+<table>
+  <tr>
+    <td><img width="1126" height="576" alt="Image" src="https://github.com/user-attachments/assets/a4cc013c-40a1-43ec-b629-e5a53bab49e8" /></td>
+    <td><img width="1152" height="586" alt="Image" src="https://github.com/user-attachments/assets/33ac9c51-8421-4459-8812-b44d8f4fb77f" /></td>
+  </tr>
+  <tr>
+    <td>Serial GC CPU 연산 시간</td>
+    <td>Parallel GC CPU 연산 시간</td>
+  </tr>
+</table>
 
 #### 리소스 사용량(CPU, RAM) 비교
 
-<img width="809" height="517" alt="Image" src="https://github.com/user-attachments/assets/06639d36-aacb-4979-892f-0240230cda54" />
-
-<img width="825" height="521" alt="Image" src="https://github.com/user-attachments/assets/7cbdb77f-32fa-48e8-b129-a98516447e75" />
-
+<table>
+  <tr>
+    <td><img width="809" height="517" alt="Image" src="https://github.com/user-attachments/assets/06639d36-aacb-4979-892f-0240230cda54" /></td>
+    <td><img width="825" height="521" alt="Image" src="https://github.com/user-attachments/assets/7cbdb77f-32fa-48e8-b129-a98516447e75" /></td>
+  </tr>
+  <tr>
+    <td>Serial GC 리소스 사용량</td>
+    <td>Parallel GC 리소스 사용량</td>
+  </tr>
+</table>
 
 - **분석**
   - **Serial**: 단일 스레드 수집으로 **Pause가 길고** 변동 폭이 큼. 작은 코어/작은 힙에서 단순성은 장점이나 **처리량(Throughput)**은 제한적.
@@ -153,11 +172,20 @@ CMS 미진행
 
 #### STW 비교
 
-<img width="1099" height="280" alt="Image" src="https://github.com/user-attachments/assets/e658af8e-2806-435f-9bb4-2a75b4b59543" />
+<table>
+  <tr>
+    <td><img width="1099" height="280" alt="Image" src="https://github.com/user-attachments/assets/e658af8e-2806-435f-9bb4-2a75b4b59543" /></td>
+    <td><img width="684" height="303" alt="Image" src="https://github.com/user-attachments/assets/e2960945-519d-4a58-b407-bc83c17de536" /></td>
+  </tr>
+  <tr>
+    <td>G1GC 및 ZGC 평균 STW 그래프</td>
+    <td>G1GC 및 ZGC 평균 STW</td>
+  </tr>
+</table>
 
 <img width="2224" height="1125" alt="Image" src="https://github.com/user-attachments/assets/00333f14-e1d2-4d3f-8735-fd3b5308a069" />
 
-<img width="684" height="303" alt="Image" src="https://github.com/user-attachments/assets/e2960945-519d-4a58-b407-bc83c17de536" />
+
 
 #### GC 동작 후 Heap 사용량 비교 
 
@@ -165,10 +193,16 @@ CMS 미진행
 
 #### 리소스 사용량 비교
 
-<img width="811" height="515" alt="Image" src="https://github.com/user-attachments/assets/7678e0f2-2f39-4cb5-b691-cb83337a1eb1" />
-
-<img width="809" height="497" alt="Image" src="https://github.com/user-attachments/assets/8c509a85-95ae-45d1-9dcf-de0c35350dc2" />
-
+<table>
+  <tr>
+    <td><img width="811" height="515" alt="Image" src="https://github.com/user-attachments/assets/7678e0f2-2f39-4cb5-b691-cb83337a1eb1" /></td>
+    <td><img width="809" height="497" alt="Image" src="https://github.com/user-attachments/assets/8c509a85-95ae-45d1-9dcf-de0c35350dc2" /></td>
+  </tr>
+  <tr>
+    <td>G1GC 리소스 사용량</td>
+    <td>ZGC 리소스 사용량</td>
+  </tr>
+</table>
 
 - **분석**
   - **ZGC**: 대부분의 STW가 **수 ms 이하**로 나타나 **저지연**이 탁월. 작은 힙(4GB)에서도 p99가 매우 낮게 유지되는 경향.
@@ -189,8 +223,9 @@ CMS 미진행
 ---
 
 ## 7. 회고
-김동민
-이노운
-전수민
+
+김동민  </br>
+이노운  </br>
+전수민  </br>
 
 

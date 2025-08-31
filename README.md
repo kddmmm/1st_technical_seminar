@@ -75,7 +75,8 @@
 2. **CSV 변환**
    - 생성형 AI를 이용해 GC 로그 → CSV 변환
    - 스키마: `timestamp, gc_id, phase, pause_ms, heap_before_mb, heap_after_mb, reclaimed_mb`
-   - CSV 스키마 설명
+
+  - CSV 스키마 설명
 
 | 컬럼명            | 설명                                                                 |
 |-------------------|----------------------------------------------------------------------|

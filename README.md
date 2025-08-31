@@ -102,7 +102,7 @@ while (true) {
    - 일정 크기 이상 쌓이면 리스트 clear → 참조 제거
    - System.gc() : Full GC 강제 요청
    - expansionRate : CPU 부하 증가를 위한 단순 연산
-
+<br>
  - 예외처리
 <br>
   휴식 → CPU 과부하 방지
@@ -184,7 +184,7 @@ while (true) {
 | Grafana           | 시각화 대시보드 생성                                                                |
 
    - Grafana에서 CSV Import
-   - Prometheus(Node Exporter)에서 수집한 시스템 메트릭과 함께 대시보드 구성
+   - Prometheus(Node Exporter)에서 수집한 시스템 메트릭(**CPU, 메모리 리소스**)과 함께 대시보드 구성
 
 ---
 

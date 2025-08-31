@@ -146,15 +146,22 @@
 
 <img width="698" height="326" alt="Image" src="https://github.com/user-attachments/assets/c3c69fa8-68fd-4e21-a86a-6033c5fb8e0a" />
 
-#### 리소스 사용량 비교
 
-CMS 미진행
+#### CMS GC별 타입 비교
+
+<img width="663" height="340" alt="Image" src="https://github.com/user-attachments/assets/393d4975-3fef-40f0-8c11-d09c94a6dd30" />
 
 
 - **분석**
-  - **Parallel**: **Throughput 최적화** 성향이 뚜렷. STW 구간이 길 수 있으나 전체 처리량 관점에서 유리.
-  - **CMS**: Remark/cleanup 등 **짧은 Pause를 여러 번** 발생시키며 평균 Pause는 줄 수 있으나, **tail(p99) 불안정** 및 **프래그멘테이션 위험**이 존재.
-  - **결론**: **지연보다 처리량을 우선**하는 워크로드라면 Parallel, **사용자 체감 지연**을 낮추고 싶다면 CMS가 유효. 단, CMS는 운영 리스크(단편화/Full GC)가 있어 튜닝과 모니터링이 필수.
+  - **Parallel GC**는 멀티스레드 수집으로 인해 평균 Pause가 상대적으로 낮게 유지되었음(수백 ms 수준). STW 구간이 명확히 존재하나, 병렬 처리를 통해 짧은 시간 안에 작업을 끝내는 패턴이 나타남.  
+  - **CMS GC**는 stop-the-world를 줄이기 위해 concurrent 단계(동시 마킹, 스윕 등)를 포함하지만, **Full GC 상황에서는 Pause가 매우 길게 발생**했음.  
+    - CMS 이벤트 타입별 평균 Pause:
+      - Young GC: 약 **325 ms**  
+      - Initial Mark: 약 **3.6 ms**  
+      - Remark: 약 **21.9 ms**  
+      - Full GC: 약 **1257 ms**  
+  - 특히 Full GC 구간이 **1000ms 이상으로 압도적으로 길어**, Parallel보다 CMS 전체 평균 Pause가 더 길게 측정됨. 이는 CMS가 **메모리 단편화(Fragmentation)** 문제로 Full GC를 발생시키는 경우가 있기 때문.  
+  - **결론**: CMS는 일반적인 Young/Remark 단계에서는 Pause가 짧지만, Full GC 발생 시 Parallel보다 훨씬 긴 지연을 만들어낸다. 따라서 CMS는 **지연 분포의 안정성이 낮고 tail latency가 크다**는 한계가 명확히 드러남.  
 
 ---
 
@@ -164,18 +171,25 @@ CMS 미진행
 
 <img width="676" height="343" alt="Image" src="https://github.com/user-attachments/assets/e1ba80d1-841d-4169-8026-1dc3a2531cae" />
 
+- **분석**
+  - **CMS GC(파랑)**: Pause 시간이 평균 수백 ms 수준으로 더 길게 나타났고, 실행 전체 구간에서 일관적으로 높은 값을 유지했다. 이는 concurrent 단계로 평균 Pause를 줄이려 하지만, **단편화 및 Full GC 발생 시 매우 긴 STW**를 유발하기 때문이다.  
+  - **G1 GC(주황)**: Pause 시간이 평균 수십 ms 수준으로 낮게 유지되었고, CMS 대비 변동성이 적으며 안정적인 지연 특성을 보였다. Region 단위 수집 구조 덕분에 **예측 가능한 Pause 관리**가 가능했다.  
+  - **결론**: JDK 11 환경에서 **CMS는 평균 Pause가 길고 tail latency가 크며**, **G1은 Pause가 짧고 안정적**이었다. 따라서 운영 환경에서는 CMS보다 **G1이 안정성과 예측 가능성 측면에서 더 유리**하다.
+
 #### CPU 연산 시간 비교
 
 <img width="672" height="334" alt="Image" src="https://github.com/user-attachments/assets/e59d5729-165b-461a-9867-eed805fd451a" />
+
+- **분석**
+  - **CMS GC**: CPU 사용량이 전반적으로 G1보다 높게 유지되었다. concurrent 단계에서 애플리케이션 스레드와 동시에 동작하기 때문에 **추가적인 CPU 오버헤드**가 발생한 것으로 보인다.  
+  - **G1 GC**: 상대적으로 낮은 CPU 사용률을 보였으며, Region 단위 수집을 통해 Pause 안정성을 유지하면서도 CMS보다 CPU 효율적으로 동작했다.  
+  - **결론**: CMS는 Pause를 줄이려는 목적에서 concurrent 단계를 많이 수행하다 보니 **CPU 소모가 크다**는 단점이 드러났다. 반면, G1은 CMS 대비 **CPU 효율성**이 더 높고, Pause 안정성까지 제공하여 운영 환경에서 유리하다.
 
 #### 리소스 사용량 비교
 
 <img width="811" height="515" alt="Image" src="https://github.com/user-attachments/assets/7678e0f2-2f39-4cb5-b691-cb83337a1eb1" />
 
 
-#### CMS GC별 타비 비교
-
-<img width="663" height="340" alt="Image" src="https://github.com/user-attachments/assets/393d4975-3fef-40f0-8c11-d09c94a6dd30" />
 
 
 - **분석**
@@ -202,11 +216,22 @@ CMS 미진행
 
 <img width="2224" height="1125" alt="Image" src="https://github.com/user-attachments/assets/00333f14-e1d2-4d3f-8735-fd3b5308a069" />
 
-
+- **분석**
+  - **G1 GC**: 평균 Pause가 약 **148 ms**로 측정되었으며, 실행 내내 수십~백 ms 단위의 STW가 꾸준히 발생했다. tail latency(p99)도 수백 ms 이상으로 늘어날 수 있어 지연에 민감한 워크로드에서는 한계가 보였다.  
+  - **ZGC**: 평균 Pause가 **0.018 ms** 수준으로, 사실상 Pause가 없는 것처럼 동작했다. 아래 그래프에서도 STW가 대부분 **0.015~0.03 ms 범위**에서 안정적으로 유지되며 극도로 낮은 지연을 확인할 수 있었다.  
+  - **비교**:  
+    - G1은 Throughput 위주의 설계로 안정적이지만, 저지연 요구에는 한계가 있다.  
+    - ZGC는 STW를 밀리초 단위가 아닌 **마이크로초 수준**까지 줄여 지연 민감한 시스템(실시간 서비스, 금융, 게임 서버 등)에 특히 적합하다.  
+  - **결론**: JDK 17 환경에서 ZGC는 G1 대비 **압도적으로 짧은 Pause**를 제공하며, 저지연 성능 측면에서 명확한 우위를 보였다. 다만, ZGC는 동시 실행 단계가 많아 **CPU 오버헤드가 증가할 수 있다는 점**을 고려해야 한다.
 
 #### GC 동작 후 Heap 사용량 비교 
 
 <img width="1116" height="570" alt="Image" src="https://github.com/user-attachments/assets/a4235edf-9927-4f93-ada1-0128433bbedb" />
+
+- **분석**
+  - **G1 GC**: Region 단위로 힙을 관리하기 때문에 GC 후 메모리 사용량이 크게 출렁이는 패턴을 보였다. 최대 사용량은 3~4GB에 이르렀으며, 메모리 압박이 클 때는 힙 해제가 충분히 이뤄지지 않아 높은 값이 유지되는 구간도 있었다.  
+  - **ZGC**: GC 후 힙 사용량이 약 **1~1.5GB 수준**에서 안정적으로 유지되었으며, 큰 변동 없이 부드러운 곡선을 형성했다. 이는 ZGC가 동시(compacting/concurrent) 수집을 통해 메모리 단편화를 줄이고, **힙 공간을 더 효율적으로 관리**했음을 보여준다.  
+  - **결론**: G1은 힙 관리에서 변동성이 크고 순간적인 고사용량 구간이 많지만, ZGC는 훨씬 **일정하고 안정적인 메모리 사용량**을 보였다. 따라서 ZGC는 **메모리 예측 가능성**과 **안정성** 측면에서 G1보다 유리하다.
 
 #### 리소스 사용량 비교
 
@@ -222,11 +247,15 @@ CMS 미진행
 </table>
 
 - **분석**
-  - **ZGC**: 대부분의 STW가 **수 ms 이하**로 나타나 **저지연**이 탁월. 작은 힙(4GB)에서도 p99가 매우 낮게 유지되는 경향.
-  - **G1**: 평균 Pause는 짧지만 **tail(p99)가 수십 ms**로 치솟는 케이스가 관찰될 수 있음. 대신 **Throughput은 ZGC 대비 다소 유리**한 경향.
-  - **CPU 관점**: ZGC는 동시 단계가 많아 **CPU 오버헤드가 상대적으로 높게** 관측될 수 있음. G1은 **리소스 효율** 측면에서 균형적.
-  - **결론**: **지연(레イ턴시) 최우선**이면 ZGC, **처리량·효율** 균형이면 G1. 워크로드 특성(객체 생존/할당률)에 따라 선택.
-
+  - **CPU 사용률**
+    - **G1GC**: GC 수행 구간에서 CPU 사용률이 약 **60% 이상**까지 꾸준히 유지되었다. 멀티스레드 수집이지만 STW 비중이 크기 때문에 CPU 리소스가 집중적으로 소모되는 구간이 뚜렷했다.  
+    - **ZGC**: CPU 사용률은 **20~30% 수준**에서 안정적으로 유지되었다. 동시 수집(concurrent) 단계가 많아 전체 CPU 사용 구간이 길게 분포하지만, G1처럼 급격히 치솟는 구간은 없었다.  
+  - **메모리 사용량**
+    - **G1GC**: GC 직후 메모리 사용량이 크게 줄었다가 다시 빠르게 증가하는 패턴을 반복했다. 메모리 변동성이 크며, 순간적으로 최대 7~8GB 가까이 사용되는 경우도 나타났다.  
+    - **ZGC**: 메모리 사용량이 비교적 일정하게 유지되며, 약 **3~5GB 수준**에서 안정적으로 동작했다. 큰 변동 없이 GC가 자주 일어나지 않고 효율적으로 힙을 관리하는 모습을 보였다.  
+  - **결론**
+    - **G1**은 CPU와 메모리 모두에서 사용량의 변동성이 크고 리소스 소모가 집중적으로 발생한다.  
+    - **ZGC**는 CPU 사용률은 낮고 메모리 사용량도 안정적으로 유지되어 **리소스 효율성과 안정성 측면에서 G1보다 우위**를 보였다.
 
 ---
 

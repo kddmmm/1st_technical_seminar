@@ -177,29 +177,10 @@ CMS 미진행
   - **결론**: **지연(레イ턴시) 최우선**이면 ZGC, **처리량·효율** 균형이면 G1. 워크로드 특성(객체 생존/할당률)에 따라 선택.
 
 
-
 ---
 
-## 6. 분석 (Analysis)
-### 6.1 JDK 11 결과
-- **Parallel ↔ CMS**
-  - Parallel: 처리량 유리, Pause 길다
-  - CMS: Pause 줄지만 메모리 단편화 및 remark 단계 영향
-- **CMS ↔ G1**
-  - G1: CMS 대비 안정적이고 Pause 예측 가능
-  - CMS: 일부 workload에서 Throughput은 낫지만 tail latency 취약
-
-### 6.2 JDK 17 결과
-- **G1 ↔ ZGC**
-  - ZGC: 평균/최대 Pause가 짧고 tail latency 우수
-  - G1: throughput 유리, pause는 수 밀리초~수십 밀리초 수준
-- **추세**
-  - ZGC는 확실히 저지연 특성을 보였음
-  - 그러나 작은 힙(4GB)에서는 CPU 오버헤드가 상대적으로 큼
-
----
-
-## 7. 한계와 주의사항
+## 6. 실습 간 한계점 및 개선 방향
+- 동일 테스트 코드 사용으로 인해 예상치 못한 결과 발생
 - 워크로드와 힙 4GB라는 고정 조건에서 나온 결과 → 대형 힙/다코어 환경에서는 차이 확대 예상
 - CMS는 JDK 14 이상에서는 사용할 수 없음 → JDK 11에서만 비교
 - CSV 변환은 GPT를 통해 이루어졌으므로 **검증 필수**
@@ -207,12 +188,9 @@ CMS 미진행
 
 ---
 
-## 8. 재현 가이드
-```bash
-# GC 로그 실행 예시 (JDK 17 G1)
-java -XX:+UseG1GC -Xms4g -Xmx4g \
-     -Xlog:gc*:file=gc.log:time,uptime,level,tags \
-     -jar app.jar
+## 7. 회고
+김동민
+이노운
+전수민
 
-# CSV 변환: gc.log → gc.csv (생성형 AI 활용)
-# Grafana → CSV Import → 대시보드 생성
+

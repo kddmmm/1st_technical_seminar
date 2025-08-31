@@ -65,14 +65,40 @@
 ## 4. 데이터 처리 파이프라인
 1. **실행 & 로그 수집**
    - 각 GC 조합으로 벤치마크 실행
-   - `data/raw/.../gc.log` 저장
+     
+   실행 예시(G1 GC)
+   ```java
+   java -XX:+UseG1GC -Xms4g -Xmx4g -Xlog:gc*:file=gc-g1.log:time GCTest.java
+   ```
+   - `data/.../gc.log` 저장
+
 2. **CSV 변환**
    - 생성형 AI를 이용해 GC 로그 → CSV 변환
    - 스키마: `timestamp, gc_id, phase, pause_ms, heap_before_mb, heap_after_mb, reclaimed_mb`
-   - 변환 후 검증: 이벤트 시퀀스/합계/타임스탬프 확인
+   - CSV 스키마 설명
+
+| 컬럼명            | 설명                                                                 |
+|-------------------|----------------------------------------------------------------------|
+| `timestamp`       | GC 이벤트가 발생한 시각         |
+| `gc_id`           | GC 이벤트를 구분하기 위한 고유 식별자                                |
+| `phase`           | GC 수행 단계 (예: Young GC, Major GC, Remark, Cleanup 등)            |
+| `phase_ms`        | 해당 단계(phase)에서 소요된 시간                       |
+| `heap_before_mb`  | GC 직전의 힙 메모리 사용량                                 |
+| `heap_after_mb`   | GC 직후의 힙 메모리 사용량                                  |
+| `reclaimed_mb`    | GC로 인해 회수된 메모리 크기 (MB 단위, heap_before - heap_after 값) |
+
+   - 변환 후 검증 필요: 이벤트 시퀀스/합계/타임스탬프 확인
+
 3. **시각화**
+
+| 구성요소           | 역할                                                                 |
+|-------------------|----------------------------------------------------------------------|
+| Node Exporter           | 시스템 자원 모니터링                                                                 |
+| Prometheus           | 메트릭 수집 및 저장                                                                |
+| Grafana           | 시각화 대시보드 생성                                                                |
+
    - Grafana에서 CSV Import
-   - Prometheus(Node Exporter) 시스템 메트릭과 함께 대시보드 구성
+   - Prometheus(Node Exporter)에서 수집한 시스템 메트릭과 함께 대시보드 구성
 
 ---
 

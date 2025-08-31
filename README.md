@@ -19,21 +19,96 @@
 ---
 
 ## 2. 실험 환경
-- **하드웨어(가상)**: 8 vCPU, 8GB RAM
-- **운영체제**: Linux (배포판/커널은 metadata에 기록)
-- **JDK**: 11, 17 (Temurin)
+- **하드웨어(VM)**: 8 vCPU, 8GB RAM
+- **운영체제**: Linux (Ubuntu 24.04)
+- **JDK**: 11, 17 (OpenJDK)
 - **관측 도구**
   - Node Exporter → Prometheus → Grafana (CPU, 메모리 리소스)
   - GC 로그 텍스트 → CSV 변환(GPT 이용) → Grafana Import
 - **주의사항**
   - `sh` 스크립트나 자동 파서 대신 **수동 실행 + 로그 변환** 방식 사용
-  - CMS GC는 JDK 14에서 Deprecated(사용 중단 권고), JDK 15부터 지원하지 않기 때문에 Parallel ↔ CMS, CMS ↔ G1을 진행할 경우 JDK 11에서 진행
+  - CMS GC는 JDK 14에서 Deprecated(사용 중단 권고), JDK 15부터 지원하지 않기 때문에 비교실험 중 Parallel ↔ CMS, CMS ↔ G1을 진행할 경우 JDK 11에서 진행
   - Loki, Docker **미사용**
 - **테스트 코드 : GCTest.java**
   - 테스트 코드는 성능 비교를 위해 모두 같은 코드를 사용
+ 
+    <br>
 - **테스트 코드 설명**
- - 추가 예정
+```java
+static final int OBJECT_COUNT = 100_000;
+static final int OBJECT_SIZE_BYTES = 1024;
+static final List<Object> memoryHog = new ArrayList<>();
+```
+ - OBJECT_COUNT : 한번에 생성할 객체 수
+ - OBJECT_SIZE_BYTES : 객체 메모리 사이즈 지정 (1KB)
+ - memoryHog: 메모리에 계속 유지하는 전역 리스트, Full GC 유발용
 
+```java
+byte[] data = new byte[OBJECT_SIZE_BYTES];
+List<byte[]> nested = new ArrayList<>();
+```
+ - byte[] data
+ - nested : 배열을 리스트 안에 선언하여 CPU의 부하 높임
+    - 힙 점유량 증가 → GC 자주 발생
+    - 객체 생성 시 CPU 사용 → CPU 부하 증가
+
+```java
+HeavyObject() {
+            for (int i = 0; i < 5; i++) {
+                nested.add(new byte[OBJECT_SIZE_BYTES / 2]);
+            }
+```
+   - 5개의 배열(512Byte)을 리스트에 추가
+
+```java
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+```
+   - GC 테스트용 4개의 쓰레드 풀 생성 → 병렬로 객체 생성
+
+```java
+for (int t = 0; t < 4; t++) {
+    executor.submit(() -> {
+    List<Object> localList = new ArrayList<>();
+```
+   - localList : Young Region(Eden)에 쌓임 (minor GC 대상)
+
+```java
+while (true) {
+  for (int i = 0; i < OBJECT_COUNT / 4; i++) {
+       localList.add(new HeavyObject());
+  }
+
+  if (localList.size() > 100_000) {
+      localList.clear();
+  }
+```
+   - 반복문 안에서 객체 생성
+   - 리스트가 커지면 참조 제거 → 가비지 발생, GC 대상
+
+```java
+ long duration = 5 * 60 * 1000;
+```
+   - 메인 스레드에서 5분간 테스트 실행
+
+```java
+ if (memoryHog.size() > 500_000 + expansionRate) {
+                memoryHog.clear();
+                System.gc();    //명시적인 GC 호출
+                System.out.println("== 강제 Full GC 요청 ==");
+                expansionRate += 50_000; 
+  }
+```
+   - 일정 크기 이상 쌓이면 리스트 clear → 참조 제거
+   - System.gc() : Full GC 강제 요청
+   - expansionRate : CPU 부하 증가를 위한 단순 연산
+
+ - 예외처리
+<br>
+  휴식 → CPU 과부하 방지
+<br>
+  예외 발생 시 인터럽트 상태 유지 
+
+  
 ---
 
 ## 3. 비교한 GC 알고리즘 개념
@@ -70,9 +145,18 @@
    ```java
    java -XX:+UseG1GC -Xms4g -Xmx4g -Xlog:gc*:file=gc-g1.log:time GCTest.java
    ```
-   - `data/.../gc.log` 저장
+   - 로그 수집 커맨드 설명
+     -  +UseG1GC : 사용하는 GC 종류 설정 (JVM option)
+     - -Xms4g -Xmx4g : JVM Heap size setting
+       -  -Xms4g : JVM 시작 시 힙 크기 (4GB)
+       -  -Xmx4g : JVM 최대 힙 크기 (4GB)
+       -  초기와 최대 힙 크기를 같게 설정하면 GC 시 힙 크기 변화로 인한 변동이 없어서 GC 특성 측정이 일정해짐
+     - -Xlog:gc*:file=gc-g1.log:time : GC 로그 기록 옵션
+       - gc*: 모든 GC 이벤트(log level) 기록
+       - file=gc-g1.log: 로그를 gc-g1.log 파일로 저장
+       - time: 로그에 타임스탬프를 기록(이벤트 체크) 
 
-2. **CSV 변환**
+3. **CSV 변환**
    - 생성형 AI를 이용해 GC 로그 → CSV 변환
    - 스키마: `timestamp, gc_id, phase, pause_ms, heap_before_mb, heap_after_mb, reclaimed_mb`
 
@@ -86,7 +170,7 @@
 | `phase_ms`        | 해당 단계(phase)에서 소요된 시간                       |
 | `heap_before_mb`  | GC 직전의 힙 메모리 사용량                                 |
 | `heap_after_mb`   | GC 직후의 힙 메모리 사용량                                  |
-| `reclaimed_mb`    | GC로 인해 회수된 메모리 크기 (MB 단위, heap_before - heap_after 값) |
+| `reclaimed_mb`    | GC로 인해 회수된 메모리 크기 (heap_before - heap_after 값, MB 단위) |
 
    - 변환 후 검증 필요: 이벤트 시퀀스/합계/타임스탬프 확인
 

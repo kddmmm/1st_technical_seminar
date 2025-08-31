@@ -47,7 +47,7 @@ static final List<Object> memoryHog = new ArrayList<>();
 byte[] data = new byte[OBJECT_SIZE_BYTES];
 List<byte[]> nested = new ArrayList<>();
 ```
- - byte[] data
+ - byte[] data : 배열 객체 하나당 힙 1KB 사용
  - nested : 배열을 리스트 안에 선언하여 CPU의 부하 높임
     - 힙 점유량 증가 → GC 자주 발생
     - 객체 생성 시 CPU 사용 → CPU 부하 증가
@@ -59,6 +59,7 @@ HeavyObject() {
             }
 ```
    - 5개의 배열(512Byte)을 리스트에 추가
+   - 총 3.5KB의 객체 생성
 
 ```java
     ExecutorService executor = Executors.newFixedThreadPool(4);
